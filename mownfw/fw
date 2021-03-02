@@ -1,0 +1,165 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "my_fw.ipynb",
+      "provenance": [],
+      "collapsed_sections": [],
+      "authorship_tag": "ABX9TyMssgQbNQ1qWgEqWa/vm8Rh",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/deethereal/NN/blob/main/mownfw/fw\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "DMn2Af33ccer"
+      },
+      "source": [
+        "import numpy as np\r\n",
+        "\r\n",
+        "class Tensor(object):\r\n",
+        "  def __init__(self,  data, autograd=False,creators = None, creation_op = None, id =None):\r\n",
+        "    self.data = np.array(data)\r\n",
+        "    self.creation_op=creation_op  #как был создан этот тензор\r\n",
+        "    self.creators=creators #родители этого тензора\r\n",
+        "    self.grad=None\r\n",
+        "    self.autograd=autograd\r\n",
+        "    self.children={}\r\n",
+        "    if (id is None):\r\n",
+        "      id=np.random.randint(0,100000000)\r\n",
+        "    self.id=id\r\n",
+        "    if creators is not None:\r\n",
+        "      for c in creators:\r\n",
+        "        if (self.id not in c.children):\r\n",
+        "          c.children[self.id]=1\r\n",
+        "        else:\r\n",
+        "          c.children[self.id]+=1\r\n",
+        "  def all_children_grads_accounted_for(self):\r\n",
+        "    for id, cnt in self.children.items():\r\n",
+        "      if (cnt!=0):\r\n",
+        "        return False\r\n",
+        "    return True\r\n",
+        "  def backward(self,grad, grad_origin=None):\r\n",
+        "    if (self.autograd):\r\n",
+        "      if (grad_origin is not None):\r\n",
+        "        if (self.children[grad_origin.id] ==0):\r\n",
+        "          raise Exception ('cannot backpop more once')\r\n",
+        "        else:\r\n",
+        "          self.children[grad_origin.id]-=1\r\n",
+        "      if self.grad is None:\r\n",
+        "        self.grad=grad\r\n",
+        "      else:\r\n",
+        "        self.grad+=grad\r\n",
+        "      if (self.creators is not None and (self.all_children_grads_accounted_for() or grad_origin is None)):\r\n",
+        "        if self.creation_op == \"add\":\r\n",
+        "          self.creators[0].backward(grad) \r\n",
+        "          self.creators[1].backward(grad)\r\n",
+        "        if self.creation_op == \"neg\":\r\n",
+        "          self.creators[0].backward(self.grad.__neg__()) \r\n",
+        "  def __add__(self,other):\r\n",
+        "    if self.autograd and other.autograd:\r\n",
+        "      return Tensor(self.data+other.data, autograd=True, creators=[self,other],creation_op='add')\r\n",
+        "    return Tensor(self.data+other.data)\r\n",
+        "  def __neg__(self):\r\n",
+        "    if self.autograd:\r\n",
+        "      return Tensor(self.data, autograd=True, creators=[self],creation_op='neg')\r\n",
+        "    return Tensor(self.data*-1)\r\n",
+        "  def __sub__(self,other):\r\n",
+        "    if(self.autograd and other.autograd):\r\n",
+        "      return Tensor(sel.data-self.data,autograd=True,creators=[self,other],creation_op='sub')\r\n",
+        "    return Tensor(self.data-other.data)\r\n",
+        "  def __mul__(self,other):\r\n",
+        "    if(self.autograd and other.autograd):\r\n",
+        "      return Tensor(sel.data*self.data,autograd=True,creators=[self,other],creation_op='mul')\r\n",
+        "    return Tensor(self.data*other.data)\r\n",
+        "  def sum(self,dim):\r\n",
+        "    if(self.autograd):\r\n",
+        "      return Tensor(self.data.sum(dim),autograd=True,creators=[self],creation_op='sum_'+str(dim))\r\n",
+        "    return Tensor(self.data.sum(dim))\r\n",
+        "  def expand(self,dim,copies):\r\n",
+        "    trans_cmd = list(range(0,len(self.data.shape)))\r\n",
+        "    trans_cmd.insert(dim,len(self.data.shape))\r\n",
+        "    new_shape=list(self.data.shape) + [copies]\r\n",
+        "    new_data = self.data.repeat(copies).reshape(new_shape)\r\n",
+        "    new_data = new_data.transpose(trans_cmd)\r\n",
+        "\r\n",
+        "    if (self.autograd):\r\n",
+        "      return Tensor(new_data,autograd=True,creators=[self],creation_op='expand_'+str(dim))\r\n",
+        "    return Tensor(new_data)\r\n",
+        "  def transpose(self):\r\n",
+        "    if (self.autograd):\r\n",
+        "      return Tensor(self.data.transpose(),autograd=True,creators=[self],creation_op='transpose')\r\n",
+        "    return Tensor(self.data.transpose())\r\n",
+        "  def mm(self.x):\r\n",
+        "     if (self.autograd):\r\n",
+        "      return Tensor(self.data.dot(x.data),autograd=True,creators=[self,x],creation_op='mm')\r\n",
+        "    return Tensor(self.data.dot(x.data))\r\n",
+        "#Добавить в backward новые функции\r\n",
+        "\r\n",
+        "  def __repr__(self):\r\n",
+        "    return str(self.data.__repr__())\r\n",
+        "  def __str__(self):\r\n",
+        "    return str(self.data.__str__())"
+      ],
+      "execution_count": 35,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "SYFN6A1m-iFb",
+        "outputId": "0c7d647d-ec2b-486d-c7ac-6f0bbb22e345"
+      },
+      "source": [
+        "a=Tensor([1,2,3,4,5],autograd=True)\n",
+        "b=Tensor([2,2,2,2,2],autograd=True)\n",
+        "c=Tensor([5,4,3,2,1],autograd=True)\n",
+        "d=a+(-b)\n",
+        "e=(-b)+c\n",
+        "f=d+e\n",
+        "f.backward(Tensor(np.array([1,1,1,1,1])))\n",
+        "print(b.grad.data)"
+      ],
+      "execution_count": 36,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "[-2 -2 -2 -2 -2]\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "hrtB2NEU-mjf"
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 24,
+      "outputs": []
+    }
+  ]
+}
